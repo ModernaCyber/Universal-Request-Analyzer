@@ -6,8 +6,8 @@
 
 import featureFlags from '../config/feature-flags.js';
 
-// Check if running in a Chrome extension environment
-const isChromeExtension = typeof chrome !== 'undefined' && chrome.storage !== undefined;
+// Cross-browser API support (no localStorage fallback)
+const browserAPI = globalThis.browser || globalThis.chrome;
 
 // Default roles and their permissions
 const DEFAULT_ROLES = {
@@ -204,15 +204,15 @@ class ACLManager {
    */
   async loadFromStorage() {
     return new Promise((resolve) => {
-      if (isChromeExtension) {
-        chrome.storage.local.get('aclData', (data) => {
-          resolve(data.aclData || null);
-        });
-      } else {
-        // Mock chrome.storage.local for non-extension environments (e.g., testing)
-        const mockData = localStorage.getItem('aclData');
-        resolve(mockData ? JSON.parse(mockData) : null);
+      if (!browserAPI || !browserAPI.storage) {
+        console.warn("[ACLManager] Browser storage API not available");
+        resolve(null);
+        return;
       }
+
+      browserAPI.storage.local.get('aclData', (data) => {
+        resolve(data.aclData || null);
+      });
     });
   }
 
@@ -222,31 +222,23 @@ class ACLManager {
    */
   async saveToStorage() {
     return new Promise((resolve) => {
-      if (isChromeExtension) {
-        chrome.storage.local.set(
-          {
-            aclData: {
-              roles: this.roles,
-              currentRole: this.currentRole,
-              customPermissions: this.customPermissions,
-              timestamp: Date.now(),
-            },
-          },
-          resolve,
-        );
-      } else {
-        // Mock chrome.storage.local for non-extension environments (e.g., testing)
-        localStorage.setItem(
-          'aclData',
-          JSON.stringify({
+      if (!browserAPI || !browserAPI.storage) {
+        console.warn("[ACLManager] Browser storage API not available, data not persisted");
+        resolve();
+        return;
+      }
+
+      browserAPI.storage.local.set(
+        {
+          aclData: {
             roles: this.roles,
             currentRole: this.currentRole,
             customPermissions: this.customPermissions,
             timestamp: Date.now(),
-          }),
-        );
-        resolve();
-      }
+          },
+        },
+        resolve,
+      );
     });
   }
 

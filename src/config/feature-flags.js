@@ -131,38 +131,8 @@ const FEATURE_CATEGORIES = {
   experimental: ['aiAnalysis', 'predictiveAnalytics', 'securityScanning'],
 };
 
-// Declare chrome if it's not already defined (e.g., in a testing environment)
-if (typeof chrome === 'undefined') {
-  global.chrome = {
-    storage: {
-      local: {
-        get: (keys, callback) => {
-          // Mock implementation for testing
-          const data = {};
-          if (typeof keys === 'string') {
-            data[keys] = localStorage.getItem(keys);
-          } else if (Array.isArray(keys)) {
-            keys.forEach((key) => {
-              data[key] = localStorage.getItem(key);
-            });
-          } else if (typeof keys === 'object') {
-            Object.keys(keys).forEach((key) => {
-              data[key] = localStorage.getItem(key);
-            });
-          }
-          callback(data);
-        },
-        set: (items, callback) => {
-          // Mock implementation for testing
-          Object.entries(items).forEach(([key, value]) => {
-            localStorage.setItem(key, JSON.stringify(value));
-          });
-          callback();
-        },
-      },
-    },
-  };
-}
+// Cross-browser API support (no localStorage fallback)
+const browserAPI = globalThis.browser || globalThis.chrome;
 
 /**
  * Feature flags manager class
@@ -338,7 +308,13 @@ class FeatureFlagsManager {
    */
   async loadFromStorage() {
     return new Promise((resolve) => {
-      chrome.storage.local.get('featureFlags', (data) => {
+      if (!browserAPI || !browserAPI.storage) {
+        console.warn("[FeatureFlags] Browser storage API not available");
+        resolve({});
+        return;
+      }
+
+      browserAPI.storage.local.get('featureFlags', (data) => {
         resolve(data.featureFlags || {});
       });
     });
@@ -350,7 +326,13 @@ class FeatureFlagsManager {
    */
   async saveToStorage() {
     return new Promise((resolve) => {
-      chrome.storage.local.set(
+      if (!browserAPI || !browserAPI.storage) {
+        console.warn("[FeatureFlags] Browser storage API not available, flags not persisted");
+        resolve();
+        return;
+      }
+
+      browserAPI.storage.local.set(
         { featureFlags: { flags: this.flags, timestamp: Date.now() } },
         resolve
       );

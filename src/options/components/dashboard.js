@@ -367,7 +367,28 @@ class Dashboard {
     };
   }
 
-  initializeCharts() {
+  async initializeCharts() {
+    // Check if plots/visualizations are enabled in settings
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "getSettings"
+      });
+
+      if (response && response.success && response.settings) {
+        const visualizationSettings = response.settings.visualizations || response.settings.settings?.visualizations;
+        const enablePlots = visualizationSettings?.enablePlots;
+
+        if (enablePlots === false) {
+          console.log("[Dashboard] Plots disabled in settings, showing message");
+          this.showPlotsDisabledMessage();
+          return; // Don't initialize charts
+        }
+      }
+    } catch (error) {
+      console.warn("[Dashboard] Could not check visualization settings:", error);
+      // Continue with chart initialization if settings check fails
+    }
+
     const colors = this.getChartColors();
 
     // Volume Chart - Line chart for request volume over time
@@ -522,6 +543,63 @@ class Dashboard {
         },
       });
     }
+  }
+
+  showPlotsDisabledMessage() {
+    const chartsSection = document.querySelector(".dashboard-charts");
+    if (!chartsSection) return;
+
+    chartsSection.innerHTML = `
+      <div style="
+        text-align: center;
+        padding: 60px 20px;
+        background: var(--surface-color);
+        border: 2px dashed var(--border-color);
+        border-radius: 12px;
+        margin: 20px 0;
+      ">
+        <div style="font-size: 48px; color: var(--warning-color); margin-bottom: 16px;">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <h3 style="
+          color: var(--text-primary);
+          margin: 0 0 12px 0;
+          font-size: 20px;
+          font-weight: 600;
+        ">
+          Visualizations Disabled
+        </h3>
+        <p style="
+          color: var(--text-secondary);
+          margin: 0 0 24px 0;
+          font-size: 14px;
+          max-width: 400px;
+          margin-left: auto;
+          margin-right: auto;
+        ">
+          Chart visualizations are currently disabled in your settings.
+          Enable them to see request volume, status distribution, and performance trends.
+        </p>
+        <button 
+          onclick="window.location.hash = '#settings'; document.querySelector('[data-section=\\'general\\']')?.click();"
+          style="
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+          "
+          onmouseover="this.style.opacity='0.9'"
+          onmouseout="this.style.opacity='1'"
+        >
+          <i class="fas fa-cog"></i> Enable in Settings
+        </button>
+      </div>
+    `;
   }
 
   async refreshDashboard() {
@@ -3912,7 +3990,18 @@ class Dashboard {
     try {
       const filters = this.getActiveFilters();
 
+      // Web Vitals are page-specific metrics - require page selection
+      if (!filters.pageUrl) {
+        console.log("[Dashboard] Skipping Web Vitals - no page selected (page-level metrics only)");
+        this.hideWebVitals("Please select a specific page to view Core Web Vitals");
+        return;
+      }
+
       console.log("[Dashboard] Requesting Web Vitals with filters:", filters);
+
+      // Show the Web Vitals section immediately when page is selected
+      // This removes the overlay even if we don't have data yet
+      this.showWebVitals();
 
       // Get Web Vitals from background
       const response = await chrome.runtime.sendMessage({
@@ -3958,6 +4047,61 @@ class Dashboard {
     } catch (error) {
       console.error("[Dashboard] Failed to update web vitals:", error);
     }
+  }
+
+  hideWebVitals(message = "Select a specific page to view Core Web Vitals") {
+    const webVitalsSection = document.querySelector(".web-vitals-grid");
+    if (!webVitalsSection) return;
+
+    // Hide the actual vitals cards and show a message
+    webVitalsSection.style.opacity = "0.5";
+    webVitalsSection.style.pointerEvents = "none";
+
+    // Add overlay message if not exists
+    let overlay = webVitalsSection.parentElement.querySelector(".page-level-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "page-level-overlay";
+      overlay.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--surface-color);
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        padding: 24px;
+        text-align: center;
+        max-width: 400px;
+        z-index: 10;
+      `;
+      overlay.innerHTML = `
+        <i class="fas fa-info-circle" style="font-size: 32px; color: var(--info-color); margin-bottom: 12px;"></i>
+        <p style="margin: 0; color: var(--text-primary); font-weight: 500;">${message}</p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; color: var(--text-secondary);">
+          Core Web Vitals are page-specific performance metrics
+        </p>
+      `;
+
+      // Ensure parent has position: relative
+      webVitalsSection.parentElement.style.position = "relative";
+      webVitalsSection.parentElement.appendChild(overlay);
+    }
+  }
+
+  showWebVitals() {
+    const webVitalsSection = document.querySelector(".web-vitals-grid");
+    if (!webVitalsSection) return;
+
+    // Remove overlay if exists
+    const overlay = webVitalsSection.parentElement.querySelector(".page-level-overlay");
+    if (overlay) {
+      overlay.remove();
+    }
+
+    // Show the vitals cards
+    webVitalsSection.style.opacity = "1";
+    webVitalsSection.style.pointerEvents = "auto";
   }
 
   updateVitalCard(metric, data) {

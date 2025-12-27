@@ -9,6 +9,14 @@ class RunnersManager {
     this.selectedRunner = null;
     this.refreshInterval = null;
     this.runningRunners = new Set(); // Track which runners are currently executing
+    this.isCreatingRunner = false; // Prevent duplicate runner creation
+    
+    // Pagination state
+    this.currentPage = 1;
+    this.perPage = 50;
+    this.totalCount = 0;
+    this.searchQuery = "";
+    this.searchTimeout = null;
   }
 
   async initialize() {
@@ -54,9 +62,18 @@ class RunnersManager {
     // Search/filter
     const runnerSearch = document.getElementById("runnerSearch");
     if (runnerSearch) {
-      runnerSearch.addEventListener("input", (e) =>
-        this.filterRunners(e.target.value)
-      );
+      runnerSearch.addEventListener("input", (e) => {
+        // Debounce search - wait 300ms after user stops typing
+        if (this.searchTimeout) {
+          clearTimeout(this.searchTimeout);
+        }
+        
+        this.searchTimeout = setTimeout(() => {
+          this.searchQuery = e.target.value.trim();
+          this.currentPage = 1; // Reset to first page on new search
+          this.loadRunners(1);
+        }, 300);
+      });
     }
 
     const runnerTypeFilter = document.getElementById("runnerTypeFilter");
@@ -128,8 +145,9 @@ class RunnersManager {
     });
   }
 
-  async loadRunners() {
+  async loadRunners(page = 1) {
     const runnersGrid = document.getElementById("runnersGrid");
+    this.currentPage = page;
 
     try {
       // Show loading state
@@ -142,13 +160,19 @@ class RunnersManager {
         `;
       }
 
+      const offset = (page - 1) * this.perPage;
       const response = await chrome.runtime.sendMessage({
         action: "getAllRunners",
+        offset: offset,
+        limit: this.perPage,
+        searchQuery: this.searchQuery || null
       });
 
       if (response && response.success) {
         this.runners = response.runners || [];
+        this.totalCount = response.totalCount || 0;
         this.renderRunners();
+        this.renderPagination();
       } else {
         // Show error in grid
         if (runnersGrid) {
@@ -189,6 +213,92 @@ class RunnersManager {
 
       this.showToast("Error loading runners: " + error.message, "error");
     }
+  }
+
+  renderPagination() {
+    const container = document.getElementById("runnersPagination");
+    if (!container) return;
+
+    // No items
+    if (this.totalCount === 0) {
+      container.innerHTML = "";
+      return;
+    }
+
+    const totalPages = Math.ceil(this.totalCount / this.perPage);
+
+    // Single page
+    if (totalPages <= 1) {
+      container.innerHTML = `
+        <span class="pagination-info">
+          Showing ${this.totalCount} runner${this.totalCount !== 1 ? "s" : ""}
+        </span>
+      `;
+      return;
+    }
+
+    // Multiple pages - build pagination UI
+    let html = `
+      <span class="pagination-info">
+        Page ${this.currentPage} of ${totalPages} (${this.totalCount} total)
+      </span>
+      <div class="pagination-buttons">
+    `;
+
+    // Previous button
+    if (this.currentPage > 1) {
+      html += `
+        <button class="pagination-btn" data-page="${this.currentPage - 1}" title="Previous page">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+      `;
+    }
+
+    // Page numbers
+    const pages = new Set();
+    pages.add(1);
+    if (this.currentPage > 1) pages.add(this.currentPage - 1);
+    pages.add(this.currentPage);
+    if (this.currentPage < totalPages) pages.add(this.currentPage + 1);
+    pages.add(totalPages);
+
+    const sortedPages = Array.from(pages).sort((a, b) => a - b);
+    let lastPage = 0;
+
+    sortedPages.forEach((p) => {
+      if (lastPage && p - lastPage > 1) {
+        html += '<span class="pagination-ellipsis">...</span>';
+      }
+      const activeClass = p === this.currentPage ? "active" : "";
+      html += `
+        <button class="pagination-btn ${activeClass}" data-page="${p}" title="Go to page ${p}">
+          ${p}
+        </button>
+      `;
+      lastPage = p;
+    });
+
+    // Next button
+    if (this.currentPage < totalPages) {
+      html += `
+        <button class="pagination-btn" data-page="${this.currentPage + 1}" title="Next page">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      `;
+    }
+
+    html += "</div>";
+    container.innerHTML = html;
+
+    // Add click handlers
+    container.querySelectorAll(".pagination-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const page = parseInt(btn.dataset.page);
+        if (page && page !== this.currentPage) {
+          this.loadRunners(page);
+        }
+      });
+    });
   }
 
   renderRunners() {
@@ -551,6 +661,93 @@ class RunnersManager {
             .join("")
         : '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">No executions yet</td></tr>';
 
+    // Parse variables if they're stored as JSON string
+    let variables = [];
+    if (runner.variables) {
+      try {
+        variables = typeof runner.variables === 'string' 
+          ? JSON.parse(runner.variables) 
+          : runner.variables;
+      } catch (e) {
+        console.warn('[Runners] Failed to parse variables:', e);
+      }
+    }
+
+    // Build variables section HTML
+    const variablesHtml = variables.length > 0
+      ? `
+        <div class="details-section">
+          <h3><i class="fas fa-code"></i> Variables in Use (${variables.length})</h3>
+          <div class="variables-list">
+            ${variables.map(variable => `
+              <div class="variable-item">
+                <div class="variable-name">
+                  <i class="fas fa-dollar-sign"></i>
+                  <code>{{${this.escapeHtml(variable.name)}}}</code>
+                </div>
+                <div class="variable-value">
+                  <span class="value-preview">${this.escapeHtml(variable.value || '(not set)')}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <style>
+            .variables-list {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              margin-top: 12px;
+            }
+            .variable-item {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding: 12px;
+              background: var(--surface-color);
+              border: 1px solid var(--border-color);
+              border-radius: 6px;
+              gap: 16px;
+            }
+            .variable-name {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              font-weight: 500;
+              color: var(--text-primary);
+            }
+            .variable-name i {
+              color: var(--primary-color);
+              font-size: 12px;
+            }
+            .variable-name code {
+              background: var(--background-color);
+              padding: 4px 8px;
+              border-radius: 4px;
+              font-size: 13px;
+              color: var(--primary-color);
+            }
+            .variable-value {
+              flex: 1;
+              text-align: right;
+            }
+            .value-preview {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              color: var(--text-secondary);
+              padding: 4px 8px;
+              background: var(--background-color);
+              border-radius: 4px;
+              max-width: 300px;
+              display: inline-block;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+          </style>
+        </div>
+      `
+      : '';
+
     const modalContent = modal.querySelector(".modal-body");
     modalContent.innerHTML = `
       <div class="runner-details">
@@ -587,6 +784,16 @@ class RunnersManager {
               <th>Total Requests:</th>
               <td>${runner.total_requests || 0}</td>
             </tr>
+            ${variables.length > 0 ? `
+            <tr>
+              <th>Variables:</th>
+              <td>
+                <span class="badge" style="background: var(--info-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">
+                  ${variables.length} variable${variables.length !== 1 ? 's' : ''}
+                </span>
+              </td>
+            </tr>
+            ` : ''}
             <tr>
               <th>Total Runs:</th>
               <td>${runner.run_count || 0}</td>
@@ -597,6 +804,8 @@ class RunnersManager {
             </tr>
           </table>
         </div>
+
+        ${variablesHtml}
 
         <div class="details-section">
           <h3><i class="fas fa-history"></i> Execution History</h3>
@@ -1884,6 +2093,9 @@ class RunnersManager {
 
         // Show success message
         this.showToast(`✓ Runner "${name}" created successfully!`, "success");
+
+        // Wait for database write to complete before reloading
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Reload runners list
         await this.loadRunners();

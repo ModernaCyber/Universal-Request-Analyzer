@@ -3,7 +3,7 @@
  * Handles UI and interaction for managing curl/fetch variables
  */
 
-import settingsManager from "../../lib/shared-components/settings-manager.js";
+import settingsManager from "../../lib/shared-components/settings-ui-coordinator.js";
 
 export class VariablesManager {
   constructor() {
@@ -89,7 +89,8 @@ export class VariablesManager {
   }
 
   loadSettings() {
-    const settings = settingsManager.settings.variables;
+    // Null-safe access to settings with fallback
+    const settings = settingsManager.settings?.variables || { enabled: true, autoDetect: true, list: [] };
     if (this.variablesEnabledToggle) {
       this.variablesEnabledToggle.checked = settings.enabled !== false;
     }
@@ -330,7 +331,8 @@ export class VariablesManager {
 
   async updateSettings(updates) {
     try {
-      const currentSettings = settingsManager.settings.variables;
+      // Null-safe access with fallback
+      const currentSettings = settingsManager.settings?.variables || { enabled: true, autoDetect: true, list: [] };
       await settingsManager.updateSettings({
         variables: {
           ...currentSettings,

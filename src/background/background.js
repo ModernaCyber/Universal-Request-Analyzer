@@ -274,6 +274,12 @@ class IntegratedExtensionInitializer {
           break;
         }
 
+        case "configureAutoExport": {
+          await this.setupAutoExport(message.config);
+          sendResponse({ success: true });
+          break;
+        }
+
         case "getDomainStats": {
           const stats = await this.medallionManager.getDomainStatistics(
             message.domain
@@ -630,6 +636,13 @@ class IntegratedExtensionInitializer {
           } catch (error) {
             console.error("Silver→Gold processing failed:", error);
           }
+        } else if (alarm.name === "autoExport") {
+          try {
+            await this.handleAutoExport();
+            console.log("Auto-export completed successfully");
+          } catch (error) {
+            console.error("Auto-export failed:", error);
+          }
         }
       });
     } else {
@@ -654,6 +667,119 @@ class IntegratedExtensionInitializer {
     console.log("✓ Periodic Tasks scheduled");
     console.log("  - Bronze→Silver: every 30 seconds");
     console.log("  - Silver→Gold: daily at midnight (chrome.alarms)");
+    console.log("  - Auto-Export: configured via settings");
+  }
+
+  async handleAutoExport() {
+    try {
+      // Load auto-export configuration from DB
+      const response = await this.popupMessageHandler({
+        action: 'getSetting',
+        category: 'export',
+        key: 'autoExport'
+      });
+
+      if (!response || !response.success || !response.value) {
+        console.log("[Auto-Export] No auto-export configuration found");
+        return;
+      }
+
+      const autoExportConfig = response.value;
+      
+      if (!autoExportConfig.enabled) {
+        console.log("[Auto-Export] Auto-export is disabled");
+        return;
+      }
+
+      console.log("[Auto-Export] Starting auto-export with config:", autoExportConfig);
+
+      // Determine export format (default to SQLite)
+      const format = autoExportConfig.format || 'sqlite';
+      let exportResponse;
+
+      // Execute export based on format
+      switch (format) {
+        case 'sqlite':
+          exportResponse = await this.popupMessageHandler({
+            action: 'exportToSQLite',
+            options: autoExportConfig.options || {}
+          });
+          break;
+        case 'json':
+          exportResponse = await this.popupMessageHandler({
+            action: 'exportToJSON',
+            options: autoExportConfig.options || {}
+          });
+          break;
+        case 'csv':
+          exportResponse = await this.popupMessageHandler({
+            action: 'exportToCSV',
+            options: autoExportConfig.options || {}
+          });
+          break;
+        default:
+          console.error("[Auto-Export] Unknown format:", format);
+          return;
+      }
+
+      if (exportResponse && exportResponse.success) {
+        console.log(`[Auto-Export] Export completed: ${exportResponse.filename}`);
+        
+        // Update last export time
+        await this.popupMessageHandler({
+          action: 'saveSetting',
+          category: 'export',
+          key: 'lastAutoExport',
+          value: Date.now()
+        });
+
+        // TODO: Handle backup rotation if maxBackups is set
+        // TODO: Trigger download or save to configured location
+      } else {
+        console.error("[Auto-Export] Export failed:", exportResponse?.error);
+      }
+    } catch (error) {
+      console.error("[Auto-Export] Error during auto-export:", error);
+    }
+  }
+
+  async setupAutoExport(config) {
+    try {
+      if (!config || !config.enabled) {
+        // Clear existing auto-export alarm
+        if (alarms) {
+          await alarms.clear("autoExport");
+        }
+        console.log("[Auto-Export] Auto-export disabled or no config");
+        return;
+      }
+
+      // Map frequency to minutes
+      const frequencyMap = {
+        'daily': 24 * 60,      // 1440 minutes
+        'weekly': 7 * 24 * 60, // 10080 minutes
+        'monthly': 30 * 24 * 60 // 43200 minutes
+      };
+
+      const periodInMinutes = frequencyMap[config.frequency] || 24 * 60;
+
+      if (alarms) {
+        // Clear existing alarm
+        await alarms.clear("autoExport");
+        
+        // Create new alarm
+        await alarms.create("autoExport", {
+          when: Date.now() + 60000, // Start in 1 minute
+          periodInMinutes: periodInMinutes
+        });
+
+        console.log(`[Auto-Export] Scheduled with frequency: ${config.frequency} (${periodInMinutes} minutes)`);
+      } else {
+        console.warn("[Auto-Export] chrome.alarms not available, auto-export won't work");
+      }
+    } catch (error) {
+      console.error("[Auto-Export] Failed to setup auto-export:", error);
+    }
   }
 
   getNextMidnight() {
@@ -672,6 +798,7 @@ class IntegratedExtensionInitializer {
     // Clear alarms
     if (alarms) {
       alarms.clear("dailyGoldProcessing");
+      alarms.clear("autoExport");
     }
 
     // Save database before cleanup

@@ -21,13 +21,13 @@ import "../../lib/shared-components/export-panel.js";
 import "../../lib/shared-components/filters.js";
 import "../../lib/shared-components/notifications.js";
 import "../../lib/shared-components/performance-monitor.js";
-import settingsManager from "../../lib/shared-components/settings-manager.js";
+import settingsManager from "../../lib/shared-components/settings-ui-coordinator.js";
 import "../../lib/shared-components/settings-ui.js";
 import "../../lib/shared-components/tab-manager.js";
 import "../components/visualization.js";
 import "../../auth/acl-manager.js";
 import "../../config/feature-flags.js";
-import themeManager from "../../config/theme-manager.js";
+import themeManager from "../../lib/ui/theme-manager.js";
 import "../../lib/chart.min.js";
 import variablesManager from "./variables-manager.js";
 
@@ -302,7 +302,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (error) {
     console.error("Error initializing options:", error);
     console.error("Error stack:", error.stack);
-    showNotification("Failed to initialize options: " + error.message, true);
+    
+    // Check if it's an extension context invalidated error
+    if (error.message?.includes("Extension context invalidated")) {
+      console.warn("Extension context was invalidated during initialization. This usually happens after an extension reload.");
+      showNotification("Extension was reloaded. Please refresh this page.", true);
+    } else {
+      showNotification("Failed to initialize options: " + error.message, true);
+    }
   }
 });
 
@@ -3625,11 +3632,26 @@ if (addCurrentSiteBtn) {
       });
       if (tabs.length > 0 && tabs[0].url) {
         const url = new URL(tabs[0].url);
+        
+        // Validate URL - Block browser internal and extension pages
+        const blockedProtocols = ['chrome:', 'edge:', 'about:', 'moz-extension:', 'chrome-extension:'];
+        if (blockedProtocols.some(protocol => url.protocol.startsWith(protocol))) {
+          showNotification("Cannot add browser internal or extension pages", true);
+          return;
+        }
+        
         const site = `${url.protocol}//${url.hostname}`;
 
         const trackingSites = document.getElementById("trackingSites");
         if (trackingSites) {
           const currentSites = trackingSites.value.trim();
+          
+          // Check for duplicates
+          if (currentSites.split('\n').some(s => s.trim() === site)) {
+            showNotification(`Site already added: ${site}`, true);
+            return;
+          }
+          
           trackingSites.value = currentSites
             ? `${currentSites}\n${site}`
             : site;

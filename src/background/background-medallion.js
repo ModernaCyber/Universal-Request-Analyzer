@@ -9,7 +9,7 @@ import { setupMessageHandlers } from "./messaging/message-handler.js";
 import { setupEventBus } from "./messaging/event-bus.js";
 import { createAnalyticsProcessor } from "./database/analytics-processor.js";
 import { createStarSchema } from "./database/star-schema.js";
-import settingsManager from "../lib/shared-components/settings-manager.js";
+import settingsManager from "../lib/shared-components/settings-manager-core.js";
 
 class MedallionExtensionInitializer {
   constructor() {
