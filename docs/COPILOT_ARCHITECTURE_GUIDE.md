@@ -368,18 +368,18 @@ Universal-Request-Analyzer/
 {
   requestsPerPage: 50,               // Pagination
   showCharts: true,                  // Enable visualizations
-  enabledCharts: [                   // Active chart types
-    'responseTime',
-    'statusCodes',
-    'domains',
-    'requestTypes',
-    'timeDistribution'
+  enabledCharts: [                   // Active chart types for dashboard
+    'requestsChart',                 // Request Volume chart (line)
+    'statusChart',                   // Status Distribution (pie)
+    'performanceChart'               // Performance Trends (area)
   ],
   defaultTab: 'requests',            // Default view
   showTimingBars: true,              // Waterfall view
   expandedDetails: false             // Auto-expand details
 }
 ```
+
+**Note**: The `enabledCharts` array controls which charts are visible in the dashboard Overview tab. The "Top Domains/Resources" chart is always visible and not configurable.
 
 **4. Advanced Settings** (`settings.advanced`):
 
@@ -780,11 +780,14 @@ UI Components (Popup, DevTools, Options)
 │  │  Message Handler (message-handler.js)                     │ │
 │  │  chrome.runtime.onMessage.addListener()                   │ │
 │  │                                                            │ │
-│  │  Routes to:                                                │ │
-│  │  - popup-message-handler.js (UI queries)                  │ │
-│  │  - Database operations                                     │ │
-│  │  - Settings updates                                        │ │
-│  │  - Export operations                                       │ │
+│  │  Routes to Modular Handlers:                              │ │
+│  │  - vitals-handlers.js (recent requests, web vitals)       │ │
+│  │  - stats-handlers.js (getFilteredStats, domain queries)   │ │
+│  │  - collection-handlers.js (runner collections)            │ │
+│  │  - analytics-handlers.js (compression, analytics)         │ │
+│  │  - settings-handlers.js (getSettings, updateSettings)     │ │
+│  │  - export-handlers.js (HAR, CSV, JSON export)             │ │
+│  │  - popup-message-handler.js (legacy handlers)             │ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐ │

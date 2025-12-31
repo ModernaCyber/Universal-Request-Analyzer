@@ -231,7 +231,14 @@ src/
 │   ├── messaging/                # Event Bus & Message Handlers
 │   │   ├── event-bus.js          # Pub/sub event system
 │   │   ├── message-handler.js    # Central message router
-│   │   └── popup-message-handler.js # Popup-specific handlers
+│   │   ├── handlers/             # Modular message handlers
+│   │   │   ├── vitals-handlers.js    # Web vitals & recent requests
+│   │   │   ├── stats-handlers.js     # Statistics & filtered data
+│   │   │   ├── collection-handlers.js # Runner collections
+│   │   │   ├── analytics-handlers.js  # Analytics & compression
+│   │   │   ├── settings-handlers.js   # Settings CRUD
+│   │   │   └── export-handlers.js     # Data export
+│   │   └── popup-message-handler.js # Legacy popup handlers
 │   ├── api/                      # API Services
 │   ├── auth/                     # Authentication
 │   ├── security/                 # Security & Encryption

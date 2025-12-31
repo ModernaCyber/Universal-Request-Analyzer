@@ -76,12 +76,14 @@ Click the extension icon in your browser toolbar.
 
 ### What You See
 
-The popup automatically shows metrics for **the current domain** you're viewing:
+The popup automatically shows metrics for **the current tab's domain** you're viewing:
 
 - **Total Requests**: Number of requests made by this domain
 - **Average Response Time**: Mean response time across all requests
 - **Error Rate**: Percentage of failed requests
 - **Data Transferred**: Total bytes transferred
+
+**Important**: The extension intelligently filters by the **page domain** (the website you're visiting), not the request URL domains. For example, when viewing `github.com`, you'll see all requests made by GitHub, including API calls to `api.github.com` and other third-party services.
 
 ### Request Type Filter
 
@@ -122,9 +124,11 @@ Use the dropdown to filter by resource type:
 
 #### Domain Filter
 
-- **Current Domain**: Shows only requests from the active tab's domain
+- **Current Domain**: Shows only requests from the **inspected window's domain** (auto-detected)
 - **All Domains**: Shows requests across all tracked domains
 - **Specific Domain**: Select from a list of tracked domains
+
+**Note**: Domain filtering is based on the **page URL** (the site making the requests), not the request destination URLs. This groups all requests by the website you're analyzing.
 
 #### Page Filter
 
@@ -410,6 +414,26 @@ Select which timing metrics to capture:
 2. Select previously exported file
 3. Choose merge or replace strategy
 4. Confirm import
+
+### Dashboard Visualization Settings
+
+#### Enable Dashboard Plots
+
+- **Default**: Enabled
+- **Purpose**: Toggle all dashboard visualizations on/off
+- **When to Disable**: If you prefer table-only view or want better performance
+
+#### Chart Types
+
+Select which charts to display on the dashboard:
+
+- **Request Volume** (`requestsChart`): Line chart showing request count over time
+- **Status Distribution** (`statusChart`): Pie chart of HTTP status codes (2xx, 3xx, 4xx, 5xx)
+- **Performance Trends** (`performanceChart`): Area chart of response times
+
+**Note**: The "Top Domains/Resources" chart is always visible when domain filtering is active.
+
+**Settings Location**: Options → General → Dashboard Visualization
 
 ### Advanced Settings
 
