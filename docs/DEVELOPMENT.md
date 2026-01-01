@@ -418,6 +418,19 @@ it('should format bytes to KB', () => { /* single assertion */ });
 - **Test README**: `test/README.md` - Complete testing guide
 - **Implementation Summary**: `test/IMPLEMENTATION_SUMMARY.md` - Requirements mapping
 - **Jest Config**: `jest.config.js` - Test runner configuration
+- **MV3 Testing**: `docs/MV3_TESTING_GUIDE.md` - Chrome MV3-specific testing (service workers, E2E)
+
+### Chrome Manifest V3 Testing
+
+Our extension uses MV3 service workers. For E2E testing, service worker lifecycle tests, and state persistence verification:
+
+👉 **See [MV3 Testing Guide](../docs/MV3_TESTING_GUIDE.md)**
+
+**Quick MV3 Testing Tips:**
+- Service worker console: `chrome://extensions/` → click "service worker"
+- Test state persistence after 30s inactivity
+- Use chrome.storage for all state (not global variables)
+- E2E tests require Playwright with extension loaded
 
 ### Manual Testing
 

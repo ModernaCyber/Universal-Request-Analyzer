@@ -565,6 +565,18 @@ npm run clean && npm run build
 npm run dev  # Already in watch mode
 ```
 
+## Manifest V3 Specific Testing
+
+Our extension uses Chrome Manifest V3 with service workers. For MV3-specific testing strategies (service worker lifecycle, state persistence, E2E testing), see:
+
+**📘 [MV3 Testing Guide](./MV3_TESTING_GUIDE.md)**
+
+Key MV3 considerations:
+- Service workers terminate after ~30s inactivity
+- Use `chrome.storage` instead of global variables
+- E2E tests require Playwright/Puppeteer with extension loaded
+- Manual testing via `chrome://extensions/` service worker console
+
 ## Additional Resources
 
 - **Jest Documentation**: https://jestjs.io/docs/getting-started
@@ -572,6 +584,8 @@ npm run dev  # Already in watch mode
 - **MSW Documentation**: https://mswjs.io/docs/
 - **Babel Configuration**: https://babeljs.io/docs/en/configuration
 - **Chrome Extension Testing**: https://developer.chrome.com/docs/extensions/mv3/tut_testing/
+- **MV3 Service Workers**: https://developer.chrome.com/docs/extensions/mv3/service_workers/
+- **Playwright for Extensions**: https://playwright.dev/
 
 ## Quick Troubleshooting Commands
 
