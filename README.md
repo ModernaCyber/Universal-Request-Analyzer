@@ -299,8 +299,12 @@ Then load the `dist` folder as an unpacked extension.
 
 - `npm run dev` - Development mode with watch
 - `npm run build` - Production build
-- `npm test` - Run tests
+- `npm test` - Run tests (no build required)
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:coverage` - Generate coverage report
 - `npm run lint` - Check code style
+
+**Testing:** Tests run directly on source code using Jest. No build step required before testing!
 
 See [Development Guide](docs/DEVELOPMENT.md) for detailed instructions.
 

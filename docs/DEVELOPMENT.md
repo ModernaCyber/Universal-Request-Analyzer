@@ -173,48 +173,264 @@ Production builds include:
 
 ## Testing
 
-### Automated Testing
+### Overview
+
+The extension uses **Jest** for testing with comprehensive unit and integration tests. Tests are **independent of the build process** - they run directly on source code without requiring a production build.
+
+### Quick Start
 
 ```bash
-# Run all tests
+# Install dependencies (if not already done)
+npm install
+
+# Run all tests (no build required!)
 npm test
 
-# Run tests in watch mode
+# Run tests in watch mode (auto-rerun on changes)
 npm run test:watch
 
 # Generate coverage report
 npm run test:coverage
 ```
 
+**Important:** Tests run directly on source files in `src/` using Babel for transpilation. You do **NOT** need to build the extension before running tests.
+
+### Build vs Test: When to Use What
+
+| Task | Command | When to Use |
+|------|---------|-------------|
+| **Testing** | `npm test` | Validate code logic, run during development |
+| **Development** | `npm run dev` | Build extension for browser testing |
+| **Production** | `npm run build` | Create optimized build for release |
+
+**Development Workflow:**
+```bash
+# 1. Make code changes
+# 2. Run tests to validate logic
+npm test
+
+# 3. If tests pass, build for browser testing
+npm run dev
+
+# 4. Load extension in browser to test UI/UX
+```
+
 ### Test Structure
 
-Tests are located in `src/tests/`:
+Tests are located in `test/` (new structure) and `src/tests/` (legacy):
 ```
-src/tests/
-├── unit/              # Unit tests
-├── integration/       # Integration tests
-└── mocks/            # Mock data and utilities
+test/                          # New comprehensive test suite
+├── unit/                      # 180+ isolated component tests
+│   ├── background/           # Request capture, message handlers, export/import
+│   ├── utils/                # URL parsing, ID generation, formatters
+│   ├── storage/              # Database operations
+│   ├── ui/                   # Dashboard components, charts, filters
+│   └── content/              # Content script functionality
+├── integration/              # 64+ end-to-end flow tests
+│   └── background/           # Capture→storage→analytics, settings sync
+├── mocks/                    # MSW handlers, Chrome API mocks
+│   ├── handlers.js           # Network request mocks
+│   ├── server.js             # MSW server setup
+│   ├── chromeMock.js         # chrome.* API mocks
+│   ├── styleMock.js          # CSS import stubs
+│   └── fileMock.js           # Asset import stubs
+├── utils/
+│   └── testHelpers.js        # 15+ reusable helpers (createMockRequest, etc.)
+└── setupTests.js             # Global setup (MSW lifecycle, polyfills)
+
+src/tests/                     # Legacy tests (being migrated)
+├── auth/                     # Authentication tests
+├── config/                   # Configuration tests
+└── ...
+```
+
+### Test Coverage
+
+**Current Status:**
+- **250 total tests** (244 passing - 97.6%)
+- **180+ unit tests** covering utilities, background services, storage, UI, content scripts
+- **64+ integration tests** for complete flows
+- **Coverage:** URL utils 94%, ID generator 100%
+
+**Run coverage report:**
+```bash
+npm run test:coverage
+
+# Open detailed HTML report
+open coverage/lcov-report/index.html  # Mac/Linux
+start coverage/lcov-report/index.html # Windows
 ```
 
 ### Writing Tests
 
-```javascript
-// Example test
-import { DatabaseManager } from '@/background/database/db-manager-medallion.js';
+#### Unit Test Example
 
-describe('DatabaseManager', () => {
-  let dbManager;
+```javascript
+import { createMockRequest, createMockDatabase } from '../../utils/testHelpers';
+
+describe('Request Processing', () => {
+  let mockDb;
   
   beforeEach(() => {
-    dbManager = new DatabaseManager();
+    mockDb = createMockDatabase(); // Compositional helper
   });
   
-  test('should initialize database', async () => {
-    await dbManager.initialize();
-    expect(dbManager.isInitialized()).toBe(true);
+  afterEach(() => {
+    jest.clearAllMocks(); // Cleanup for isolation
+  });
+  
+  // Guard clause pattern
+  it('should reject invalid requests', () => {
+    const invalidRequest = null;
+    expect(() => processRequest(invalidRequest)).toThrow();
+  });
+  
+  it('should store valid request', () => {
+    const request = createMockRequest({ id: 'req-1', status: 200 });
+    storeRequest(mockDb, request);
+    
+    expect(mockDb.prepare).toHaveBeenCalled();
   });
 });
 ```
+
+#### Integration Test Example
+
+```javascript
+describe('Capture to Analytics Integration', () => {
+  it('should complete full pipeline', async () => {
+    // 1. Capture request
+    const request = createMockRequest();
+    capturedRequests.push(request);
+    
+    // 2. Store in Bronze layer
+    await dbManager.medallion.insertBronzeRequest(request);
+    
+    // 3. Process to Silver layer
+    await dbManager.medallion.processBronzeToSilver();
+    
+    // 4. Aggregate to Gold layer
+    const stats = await dbManager.medallion.getGoldStats();
+    
+    expect(stats.totalRequests).toBe(1);
+  });
+});
+```
+
+### Test Utilities
+
+Located in `test/utils/testHelpers.js`:
+
+```javascript
+// Create mock data
+const request = createMockRequest({ status: 200 });
+const requests = createMockRequests(10); // Generate 10 requests
+const settings = createMockSettings();
+const analytics = createMockAnalytics();
+
+// Create mock objects
+const db = createMockDatabase();
+const storage = createMockStorage();
+const chart = createMockChart();
+
+// Async helpers
+await waitFor(() => condition === true, 5000);
+await delay(100);
+
+// Validation helpers
+guardAgainstNull(value, 'Value required');
+guardAgainstEmptyArray(arr, 'Array cannot be empty');
+```
+
+### MSW (Mock Service Worker)
+
+Tests use MSW to mock network requests. Handlers are in `test/mocks/handlers.js`:
+
+```javascript
+import { rest } from 'msw';
+
+export const handlers = [
+  rest.get('https://api.example.com/stats', (req, res, ctx) => {
+    return res(ctx.status(200), ctx.json({ totalRequests: 100 }));
+  }),
+];
+```
+
+MSW automatically starts/stops in tests via `setupTests.js`. No manual setup needed!
+
+### Debugging Tests
+
+```bash
+# Run single test file
+npm test -- path/to/file.test.js
+
+# Run tests matching pattern
+npm test -- --testNamePattern="Request Capture"
+
+# Debug with Node inspector
+node --inspect-brk node_modules/.bin/jest --runInBand
+
+# Verbose output
+npm test -- --verbose
+
+# Show console logs
+npm test -- --silent=false
+```
+
+### Common Test Issues
+
+#### Issue: "Cannot find module"
+**Solution:** Check import paths are relative to test file location.
+
+#### Issue: "chrome is not defined"
+**Solution:** Global `chrome` mock is set up in `setupTests.js`. Ensure Jest config loads it.
+
+#### Issue: "Timeout exceeded"
+**Solution:** Increase timeout: `jest.setTimeout(10000)` or use `--testTimeout=10000` flag.
+
+### Best Practices
+
+✅ **Guard Clauses** - Handle edge cases early
+```javascript
+it('should handle null input', () => {
+  expect(formatBytes(null)).toBe('N/A'); // Guard clause in implementation
+});
+```
+
+✅ **Compositional Helpers** - Reuse test utilities
+```javascript
+const request = createMockRequest({ id: 'req-1' }); // Not manually building
+```
+
+✅ **Test Isolation** - Each test independent
+```javascript
+beforeEach(() => { /* fresh state */ });
+afterEach(() => { jest.clearAllMocks(); });
+```
+
+✅ **Specific Tests** - One behavior per test
+```javascript
+it('should format bytes to KB', () => { /* single assertion */ });
+```
+
+### Documentation
+
+- **Test README**: `test/README.md` - Complete testing guide
+- **Implementation Summary**: `test/IMPLEMENTATION_SUMMARY.md` - Requirements mapping
+- **Jest Config**: `jest.config.js` - Test runner configuration
+- **MV3 Testing**: `docs/MV3_TESTING_GUIDE.md` - Chrome MV3-specific testing (service workers, E2E)
+
+### Chrome Manifest V3 Testing
+
+Our extension uses MV3 service workers. For E2E testing, service worker lifecycle tests, and state persistence verification:
+
+👉 **See [MV3 Testing Guide](../docs/MV3_TESTING_GUIDE.md)**
+
+**Quick MV3 Testing Tips:**
+- Service worker console: `chrome://extensions/` → click "service worker"
+- Test state persistence after 30s inactivity
+- Use chrome.storage for all state (not global variables)
+- E2E tests require Playwright with extension loaded
 
 ### Manual Testing
 
