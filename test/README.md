@@ -4,6 +4,36 @@
 
 This directory contains the comprehensive testing suite for the Universal Request Analyzer extension. Tests are organized following industry best practices with clear separation between unit and integration tests.
 
+**Important:** Tests run **independently** of the build process. You do NOT need to build the extension before running tests. Jest transpiles source code on-the-fly using Babel.
+
+## Quick Start
+
+```bash
+# Run all tests (no build required!)
+npm test
+
+# Run tests in watch mode (auto-rerun on changes)
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+```
+
+## Build vs Test
+
+| Process | Command | Purpose | Input | Output |
+|---------|---------|---------|-------|--------|
+| **Test** | `npm test` | Validate logic | `src/` files | Test results |
+| **Build** | `npm run build` | Create extension | `src/` files | `dist/` bundle |
+
+**Tests DO NOT require build** - they use Jest + Babel to transpile source code in-memory.
+
+**Development workflow:**
+1. Write code in `src/`
+2. Run `npm test` to validate logic
+3. If tests pass, run `npm run dev` to build for browser
+4. Load extension in browser to test UI/UX
+
 ## Directory Structure
 
 ```
